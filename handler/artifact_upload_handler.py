@@ -10,8 +10,8 @@ import hmac
 import os
 import subprocess
 
-import tornado.ioloop
 import tornado.httpserver
+import tornado.ioloop
 import tornado.web
 
 
@@ -37,7 +37,7 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
         """
         Check we have been passed the *correct* secure token before uploading
         the artifact to the channel.
-        
+
         """
         salt = '42679ad04d44c96ed27470c02bfb28c3'
         to_hash = '{}{}'.format(salt, token)
@@ -49,7 +49,7 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
         """
         Index the conda channel at `self.write_path` to ensure the channel
         remains consistent.
-        
+
         """
         cmds = [self.conda_exe, 'index', self.write_path]
         subprocess.check_call(cmds)
@@ -60,15 +60,15 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
         filename = file_data['filename']
         body = file_data['body']
         if self._check_token(token):
-            with open(os.path.join(self.write_path, filename), 'w') as owfh:
+            with open(os.path.join(self.write_path, filename), 'wb') as owfh:
                 owfh.write(body)
             self._index_channel()
 
 
-def make_app(write_path, conda_exe):
-    kw = {'write_path' :write_path,
+def make_app(write_path, conda_exe, token_hash):
+    kw = {'write_path': write_path,
           'conda_exe': conda_exe,
-          'token_hash': token_hash}
+          'hash_expected': token_hash}
     return tornado.web.Application([(r'/', ArtifactUploadHandler, kw)])
 
 
@@ -77,27 +77,27 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--write_dir",
                         help="directory to write artifacts to",
                         required=True,
-                       )
+                        )
     parser.add_argument("-p", "--port",
                         help="webserver port number",
                         required=True,
-                       )
+                        )
     parser.add_argument("-e", "--conda_exe",
                         help="full path to conda executable",
                         required=True,
-                       )
+                        )
     parser.add_argument("-c", "--certfile",
                         help="full path to certificate file for SSL",
                         required=True,
-                       )
+                        )
     parser.add_argument("-k", "--keyfile",
                         help="full path to keyfile for SSL",
                         required=True,
-                       )
+                        )
     parser.add_argument("-t", "--token_hash",
-                        help="secure token hash",
+                        help="hash of secure token",
                         required=True,
-                       )
+                        )
     args = parser.parse_args()
     write_path = args.write_dir
     port = args.port
@@ -112,4 +112,3 @@ if __name__ == '__main__':
     https_server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_opts)
     https_server.listen(port)
     tornado.ioloop.IOLoop.current().start()
-

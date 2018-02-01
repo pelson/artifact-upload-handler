@@ -24,7 +24,7 @@ optional arguments:
   -k KEYFILE, --keyfile KEYFILE
                         full path to keyfile for SSL
   -t TOKEN_HASH, --token_hash TOKEN_HASH
-                        secure token hash
+                        hash of secure token
 ```
 
 
@@ -69,7 +69,10 @@ observed. These keys are expected by the webserver when handling the request.
 Note that in order to prevent unauthorised uploads to the channel, the request 
 must be accompanied by a secure token that, when salted and hashed, matches the
 salted and hashed token specified when the webserver is set up
-(see [Usage](#usage) above).
+(see [Usage](#usage) above). An expected use-case of this server is to handle
+build artifacts produced from CI. In such a use-case, this secure token would be
+defined in the CI pipeline and is passed in unhashed form. We rely on the secured
+nature of the server to prevent the unhashed token being revealed.
 
 
 ### Requirements
