@@ -63,6 +63,8 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
             with open(os.path.join(self.write_path, filename), 'wb') as owfh:
                 owfh.write(body)
             self._index_channel()
+        else:
+            self.send_error(401)
 
 
 def make_app(write_path, conda_exe, token_hash):
