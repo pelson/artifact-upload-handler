@@ -31,10 +31,10 @@ optional arguments:
 ### Usage Example 
 
 For example, to start a secure webserver running on port 9999 that will write
-to the (imaginary) conda channel at ``/path/to/conda/channel``:
+linux-64 packages to the (imaginary) conda channel at ``/path/to/conda/channel``:
 
 ```
-$ python artifact_upload_handler.py -d /path/to/conda/channel \
+$ python artifact_upload_handler.py -d /path/to/conda/channel/linux-64 \
                                     -p 9999 \
                                     -e /path/to/env/bin/conda \
                                     -c /path/to/mycertfile.crt \

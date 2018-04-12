@@ -27,7 +27,8 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
 
         In this class, when we initialize `ArtifactUploadHandler`, we need to
         set:
-         * the path that incoming files will be written to,
+         * the path that incoming files will be written to, which may be
+           appended with the sub-directory arch, if provided by the client,
          * the path to the conda executable to use for indexing the channel,
          * the expected hashed and salted digest of the secure upload token.
 
@@ -48,12 +49,12 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
         # Reduce the risk of timing analysis attacks.
         return hmac.compare_digest(self.hash_expected, hash_result)
 
-    def _index_channel(self, channel):
+    def _conda_index(self, directory):
         """
-        Index the conda channel to ensure that it remains consistent.
+        Update the package index metadata files in the provided directory.
 
         """
-        cmds = [self.conda_exe, 'index', channel]
+        cmds = [self.conda_exe, 'index', directory]
         subprocess.check_call(cmds)
 
     def post(self):
@@ -64,11 +65,11 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
         filename = file_data['filename']
         body = file_data['body']
         if self._check_token(token):
-            channel = os.path.join(self.write_path, arch)
-            target = os.path.join(channel, filename)
+            directory = os.path.join(self.write_path, arch)
+            target = os.path.join(directory, filename)
             with open(target, 'wb') as owfh:
                 owfh.write(body)
-            self._index_channel(channel)
+            self._conda_index(directory)
         else:
             self.send_error(401)
 
