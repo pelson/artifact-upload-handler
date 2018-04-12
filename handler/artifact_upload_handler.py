@@ -15,6 +15,9 @@ import tornado.ioloop
 import tornado.web
 
 
+__version__ = '0.1.0dev0'
+
+
 class ArtifactUploadHandler(tornado.web.RequestHandler):
     """Handle writing conda build artifacts to a channel."""
 
@@ -45,24 +48,27 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
         # Reduce the risk of timing analysis attacks.
         return hmac.compare_digest(self.hash_expected, hash_result)
 
-    def _index_channel(self):
+    def _index_channel(self, channel):
         """
-        Index the conda channel at `self.write_path` to ensure the channel
-        remains consistent.
+        Index the conda channel to ensure that it remains consistent.
 
         """
-        cmds = [self.conda_exe, 'index', self.write_path]
+        cmds = [self.conda_exe, 'index', channel]
         subprocess.check_call(cmds)
 
     def post(self):
         token = self.get_argument('token')
+        arch = self.get_argument('arch', default='none')
+        arch = '' if arch == 'none' else arch
         file_data, = self.request.files['artifact']
         filename = file_data['filename']
         body = file_data['body']
         if self._check_token(token):
-            with open(os.path.join(self.write_path, filename), 'wb') as owfh:
+            channel = os.path.join(self.write_path, arch)
+            target = os.path.join(channel, filename)
+            with open(target, 'wb') as owfh:
                 owfh.write(body)
-            self._index_channel()
+            self._index_channel(channel)
         else:
             self.send_error(401)
 
