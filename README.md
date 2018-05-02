@@ -39,7 +39,7 @@ $ conda-upload-server -d /path/to/channel
 To test the webserver:
 
 ```
-curl -F 'artifact=@/path/to/conda/binary/package.tar.bz2' --fail http://localhost:8080/
+$ curl -F 'artifact=@/path/to/conda/binary/package.tar.bz2' --fail http://localhost:8080/
 ```
 
 This will create a conda channel in /path/to/channel/<package-platform>/, with the
@@ -48,20 +48,31 @@ appropriate channel (``repodata.json``) content.
 
 ### Secure Usage Example
 
-For example, to start a secure webserver running on port 9999 that will write
-linux-64 packages to the (imaginary) conda channel at ``/path/to/conda/channel``:
+First, we need to generate the token that must be kept secret on the server.
+We start with a secret held by the client, and optionally a salt kept by the server:
 
 ```
-$ conda-upload-server -d /path/to/conda/channel/linux-64 \
+$ python -m conda_upload_server.token the_client_secret_token
+
+Server salt:  "42679ad04d44c96ed27470c02bfb28c3"
+Client token: "the_client_secret_token"
+Server token: "72a61a0d67edd573649354adc1fce4b7e1f56add1d03ddc328fa032060c8373f"
+
+```
+
+Now we start a secure webserver running on port 9999 that will write
+linux-64 packages to the conda channel at ``/path/to/conda/channel/linux-64``:
+
+```
+$ conda-upload-server -d /path/to/conda/channel/ \
                        -p 9999 \
-                       -e /path/to/env/bin/conda \
                        -c /path/to/mycertfile.crt \
                        -k /path/to/mykeyfile.key \
-                       -t eccd989b
+                       -t 72a61a0d67edd573649354adc1fce4b7e1f56add1d03ddc328fa032060c8373f
 
 ```
 
-To test the webserver:
+To test the webserver using python and requests:
 
 ```python
 import requests
@@ -71,7 +82,7 @@ artifacts = [open('my-artifact1-1.0.0-2.tar.bz2', 'rb'),
              open('my-artifact3-0.9.1-0.tar.bz2', 'rb'),
             ]
 url = 'https://localhost:9999/'
-token = 'mysecuretoken'
+token = 'the_client_secret_token'
 
 for artifact in artifacts:
     requests.post(url, data={'token': token}, files={'artifact': artifact},

@@ -21,6 +21,8 @@ from tornado.log import enable_pretty_logging
 import tornado.web
 from tornado.web import RequestHandler, Finish
 
+from .token import DEFAULT_SALT, check_token as _check_token
+
 
 logger = logging.getLogger(__name__)
 
@@ -47,23 +49,6 @@ class ArtifactUploadHandler(RequestHandler):
         self.conda_exe = conda_exe
         self.hash_expected = hash_expected
 
-    def _check_token(self, token):
-        """
-        Check we have been passed the *correct* secure token before uploading
-        the artifact to the channel.
-
-        """
-        if self.hash_expected:
-            salt = '42679ad04d44c96ed27470c02bfb28c3'
-            to_hash = '{}{}'.format(salt, token)
-            hash_result = hashlib.sha256(to_hash.encode('utf-8')).hexdigest()
-            # Reduce the risk of timing analysis attacks.
-            result = hmac.compare_digest(self.hash_expected, hash_result)
-        else:
-            assert token is None
-            result = True
-        return result
-
     def _conda_index(self, directory):
         """
         Update the package index metadata files in the provided directory.
@@ -79,13 +64,13 @@ class ArtifactUploadHandler(RequestHandler):
         filename = file_data['filename']
         body = file_data['body']
 
-        f = io.BytesIO(body)
-        subdir = subdir_of_binary(f)
-
-        if not self._check_token(token):
+        if not _check_token(self.hash_expected, DEFAULT_SALT, token):
             self.set_status(401)
             logger.info('Unauthorized token request')
             raise Finish()
+
+        f = io.BytesIO(body)
+        subdir = subdir_of_binary(f)
 
         directory = os.path.join(self.write_path, subdir)
         if not os.path.exists(directory):
@@ -105,6 +90,7 @@ class ArtifactUploadHandler(RequestHandler):
 
 
 def subdir_of_binary(fh):
+    """Given a file handle to a tar.bz2 conda binary, identify the arch"""
     subdir = None
     with tarfile.open(fileobj=fh, mode="r:bz2") as tar:
         fh = tar.extractfile('info/index.json')
@@ -157,6 +143,7 @@ def main():
     certfile = args.certfile
     keyfile = args.keyfile
     token_hash = args.token_hash
+
 
     if not conda_exe:
         conda_exe = distutils.spawn.find_executable("conda")
