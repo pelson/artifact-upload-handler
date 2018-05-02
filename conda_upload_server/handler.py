@@ -81,7 +81,7 @@ def make_app(write_path, conda_exe, token_hash):
     return tornado.web.Application([(r'/', ArtifactUploadHandler, kw)])
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--write_dir",
                         help="directory to write artifacts to",
@@ -121,3 +121,7 @@ if __name__ == '__main__':
     https_server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_opts)
     https_server.listen(port)
     tornado.ioloop.IOLoop.current().start()
+
+
+if __name__ == '__main__':
+    main()

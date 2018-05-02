@@ -9,7 +9,7 @@ To use, simply clone this repo and run the Python webserver, observing the
 ## Usage
 
 ```
-usage: artifact_upload_handler.py [-h] -d WRITE_DIR -p PORT -e CONDA_EXE -c
+usage: conda-upload-server [-h] -d WRITE_DIR -p PORT -e CONDA_EXE -c
                                   CERTFILE -k KEYFILE -t TOKEN_HASH
 
 optional arguments:
@@ -34,12 +34,12 @@ For example, to start a secure webserver running on port 9999 that will write
 linux-64 packages to the (imaginary) conda channel at ``/path/to/conda/channel``:
 
 ```
-$ python artifact_upload_handler.py -d /path/to/conda/channel/linux-64 \
-                                    -p 9999 \
-                                    -e /path/to/env/bin/conda \
-                                    -c /path/to/mycertfile.crt \
-                                    -k /path/to/mykeyfile.key \
-                                    -t eccd989b
+$ conda-upload-server -d /path/to/conda/channel/linux-64 \
+                       -p 9999 \
+                       -e /path/to/env/bin/conda \
+                       -c /path/to/mycertfile.crt \
+                       -k /path/to/mykeyfile.key \
+                       -t eccd989b
 
 ```
 
