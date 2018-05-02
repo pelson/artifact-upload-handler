@@ -5,20 +5,30 @@ file location.
 """
 
 import argparse
+import distutils.spawn
 import hashlib
 import hmac
+import io
+import json
+import logging
 import os
 import subprocess
+import tarfile
 
 import tornado.httpserver
 import tornado.ioloop
+from tornado.log import enable_pretty_logging
 import tornado.web
+from tornado.web import RequestHandler, Finish
+
+
+logger = logging.getLogger(__name__)
 
 
 __version__ = '0.1.0dev0'
 
 
-class ArtifactUploadHandler(tornado.web.RequestHandler):
+class ArtifactUploadHandler(RequestHandler):
     """Handle writing conda build artifacts to a channel."""
 
     def initialize(self, write_path, conda_exe, hash_expected):
@@ -43,11 +53,16 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
         the artifact to the channel.
 
         """
-        salt = '42679ad04d44c96ed27470c02bfb28c3'
-        to_hash = '{}{}'.format(salt, token)
-        hash_result = hashlib.sha256(to_hash).hexdigest()
-        # Reduce the risk of timing analysis attacks.
-        return hmac.compare_digest(self.hash_expected, hash_result)
+        if self.hash_expected:
+            salt = '42679ad04d44c96ed27470c02bfb28c3'
+            to_hash = '{}{}'.format(salt, token)
+            hash_result = hashlib.sha256(to_hash.encode('utf-8')).hexdigest()
+            # Reduce the risk of timing analysis attacks.
+            result = hmac.compare_digest(self.hash_expected, hash_result)
+        else:
+            assert token is None
+            result = True
+        return result
 
     def _conda_index(self, directory):
         """
@@ -55,23 +70,50 @@ class ArtifactUploadHandler(tornado.web.RequestHandler):
 
         """
         cmds = [self.conda_exe, 'index', directory]
-        subprocess.check_call(cmds)
+        output = subprocess.check_output(cmds)
+        logger.info('\n' + output.decode('utf-8').strip())
 
     def post(self):
-        token = self.get_argument('token')
-        arch = self.get_argument('arch', default='none')
-        arch = '' if arch == 'none' else arch
+        token = self.get_argument('token', default=None)
         file_data, = self.request.files['artifact']
         filename = file_data['filename']
         body = file_data['body']
-        if self._check_token(token):
-            directory = os.path.join(self.write_path, arch)
-            target = os.path.join(directory, filename)
-            with open(target, 'wb') as owfh:
-                owfh.write(body)
-            self._conda_index(directory)
-        else:
-            self.send_error(401)
+
+        f = io.BytesIO(body)
+        subdir = subdir_of_binary(f)
+
+        if not self._check_token(token):
+            self.set_status(401)
+            logger.info('Unauthorized token request')
+            raise Finish()
+
+        directory = os.path.join(self.write_path, subdir)
+        if not os.path.exists(directory):
+            logger.info('Creating a new channel at {}'.format(directory))
+            os.makedirs(directory)
+        target = os.path.join(directory, filename)
+
+        # Don't overwrite existing binaries.
+        if os.path.exists(target):
+            self.set_status(401)
+            logger.info('Attempting to overwrite an existing binary')
+            raise Finish()
+
+        with open(target, 'wb') as owfh:
+            owfh.write(body)
+        self._conda_index(directory)
+
+
+def subdir_of_binary(fh):
+    subdir = None
+    with tarfile.open(fileobj=fh, mode="r:bz2") as tar:
+        fh = tar.extractfile('info/index.json')
+        if fh is not None:
+            index = json.loads(fh.read().decode('utf-8'))
+            subdir = index.get('subdir', None)
+    if not subdir:
+        raise ValueError('Subdir cannot be determined for binary')
+    return subdir
 
 
 def make_app(write_path, conda_exe, token_hash):
@@ -85,28 +127,29 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--write_dir",
                         help="directory to write artifacts to",
-                        required=True,
+                        default=os.getcwd(),
                         )
     parser.add_argument("-p", "--port",
                         help="webserver port number",
-                        required=True,
+                        default=8080,
                         )
     parser.add_argument("-e", "--conda_exe",
                         help="full path to conda executable",
-                        required=True,
+                        default=None,
                         )
     parser.add_argument("-c", "--certfile",
                         help="full path to certificate file for SSL",
-                        required=True,
+                        default=None,
                         )
     parser.add_argument("-k", "--keyfile",
                         help="full path to keyfile for SSL",
-                        required=True,
+                        default=None,
                         )
     parser.add_argument("-t", "--token_hash",
                         help="hash of secure token",
-                        required=True,
+                        default=None,
                         )
+
     args = parser.parse_args()
     write_path = args.write_dir
     port = args.port
@@ -115,11 +158,27 @@ def main():
     keyfile = args.keyfile
     token_hash = args.token_hash
 
-    ssl_opts = {'certfile': certfile,
-                'keyfile': keyfile}
+    if not conda_exe:
+        conda_exe = distutils.spawn.find_executable("conda")
+
+    if certfile or keyfile:
+        ssl_opts = {'certfile': certfile,
+                    'keyfile': keyfile}
+    else:
+        ssl_opts = None
+
+    enable_pretty_logging()
+
+    url = '{protocol}{host}:{port}'.format(
+        protocol='https://' if ssl_opts else 'http://',
+        host='localhost',
+        port=port)
+
+    logger.info('Serving on {url}'.format(url=url))
+
     app = make_app(write_path, conda_exe, token_hash)
-    https_server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_opts)
-    https_server.listen(port)
+    server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_opts)
+    server.listen(port)
     tornado.ioloop.IOLoop.current().start()
 
 

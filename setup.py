@@ -27,7 +27,9 @@ setup(
     keywords='conda upload channel',
     packages=find_packages(),
 
-    install_requires=['tornado'],
+    python_requires='>=3.5',
+    install_requires=[
+        'tornado'],
 
     entry_points={  # Optional
         'console_scripts': [

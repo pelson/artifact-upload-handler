@@ -27,8 +27,26 @@ optional arguments:
                         hash of secure token
 ```
 
+### Basic Usage Example
 
-### Usage Example 
+To start an insecure webserver that will write packages to a conda channel in the
+given directory:
+
+```
+$ conda-upload-server -d /path/to/channel
+```
+
+To test the webserver:
+
+```
+curl -F 'artifact=@/path/to/conda/binary/package.tar.bz2' --fail http://localhost:8080/
+```
+
+This will create a conda channel in /path/to/channel/<package-platform>/, with the
+appropriate channel (``repodata.json``) content.
+
+
+### Secure Usage Example
 
 For example, to start a secure webserver running on port 9999 that will write
 linux-64 packages to the (imaginary) conda channel at ``/path/to/conda/channel``:
